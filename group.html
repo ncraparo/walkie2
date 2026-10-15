@@ -270,49 +270,33 @@ input:focus-visible, button:focus-visible { outline: 3px solid var(--rx); outlin
 
   var MAX = 6; // people per channel
 
-  /* ===== RELAY SETTINGS (optional) =====
-     Phones on different networks sometimes can't reach each other
-     directly. A relay server fixes that. Leave these empty if you
-     don't need one.
-
-     To use the free Metered relay: sign up at metered.ca, then copy
-     your app name (the part before ".metered.live") and your API key
-     from the dashboard, and paste them between the quotes below. */
-  var RELAY_APP = "";
-  var RELAY_API_KEY = "";
+  /* ===== RELAY SETTINGS =====
+     A relay server passes the audio along when two phones can't connect
+     directly (for example when they're on different networks). These
+     come from your Metered dashboard. To stop using the relay, empty
+     both quotes. */
+  var RELAY_USERNAME = "1a4450a5f3266086bbde4e98";
+  var RELAY_PASSWORD = "msq96P8t0jKDSx9j";
   /* ====================================== */
 
   var ICE_SERVERS = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" }
   ];
-  var relayProblem = false;
-
-  // Asks the relay service for fresh connection details when someone joins.
-  async function loadRelay() {
-    var app = String(RELAY_APP || "").trim().replace(/^https?:\/\//, "").replace(/\.metered\.live.*$/, "");
-    var key = String(RELAY_API_KEY || "").trim();
-    if (!app || !key) return;
-    var timer = null;
-    try {
-      var ctl = window.AbortController ? new AbortController() : null;
-      timer = setTimeout(function () { if (ctl) ctl.abort(); }, 6000);
-      var r = await fetch("https://" + encodeURIComponent(app) + ".metered.live/api/v1/turn/credentials?apiKey=" + encodeURIComponent(key), ctl ? { signal: ctl.signal } : {});
-      if (!r.ok) throw new Error("Relay service said " + r.status);
-      var list = await r.json();
-      if (!Array.isArray(list) || !list.length) throw new Error("Relay service returned nothing usable");
-      ICE_SERVERS = list;
-    } catch (e) {
-      relayProblem = true;
-      console.error("Relay setup failed:", e);
-    }
-    clearTimeout(timer);
+  if (RELAY_USERNAME && RELAY_PASSWORD) {
+    ICE_SERVERS = [
+      { urls: "stun:stun.relay.metered.ca:80" },
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "turn:global.relay.metered.ca:80", username: RELAY_USERNAME, credential: RELAY_PASSWORD },
+      { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: RELAY_USERNAME, credential: RELAY_PASSWORD },
+      { urls: "turn:global.relay.metered.ca:443", username: RELAY_USERNAME, credential: RELAY_PASSWORD },
+      { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: RELAY_USERNAME, credential: RELAY_PASSWORD }
+    ];
   }
 
   function relayAdvice() {
-    if (!RELAY_APP || !RELAY_API_KEY) return " A relay server fixes that.";
-    if (relayProblem) return " The relay couldn\u2019t be reached, so check the app name and API key in the page.";
-    return "";
+    if (!RELAY_USERNAME || !RELAY_PASSWORD) return " A relay server fixes that.";
+    return " The relay is on, so try reloading both pages and check your Metered usage hasn\u2019t run out.";
   }
 
   var $ = function (id) { return document.getElementById(id); };
@@ -794,10 +778,6 @@ input:focus-visible, button:focus-visible { outline: 3px solid var(--rx); outlin
       });
       micTrack = localStream.getAudioTracks()[0];
       micTrack.enabled = false;
-
-      if (RELAY_APP && RELAY_API_KEY) els.joinNote.textContent = "Setting up the relay…";
-      await loadRelay();
-      els.joinNote.textContent = "";
 
       safeSet("wt-name", els.name.value.trim());
       safeSet("wt-channel", ch);
